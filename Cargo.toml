@@ -1,0 +1,8 @@
+[package]
+name = "asic-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+macaddr = "1.0.1"
+measurements = "0.11.0"
