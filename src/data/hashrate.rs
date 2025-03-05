@@ -11,7 +11,7 @@ pub enum HashRateUnit {
 }
 
 pub struct HashRate {
-    value: f32,
-    unit: HashRateUnit,
-    algo: String,
+    pub value: f32,
+    pub unit: HashRateUnit,
+    pub algo: String,
 }

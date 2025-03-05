@@ -5,18 +5,18 @@ pub enum PoolScheme {
 }
 
 pub struct PoolURL {
-    scheme: PoolScheme,
-    host: String,
-    port: u16,
-    pubkey: Option<String>,
+    pub scheme: PoolScheme,
+    pub host: String,
+    pub port: u16,
+    pub pubkey: Option<String>,
 }
 
 pub struct PoolData {
-    position: u16,
-    url: PoolURL,
-    accepted_shares: u64,
-    rejected_shares: u64,
-    active: bool,
-    alive: bool,
-    user: String,
+    pub position: u16,
+    pub url: PoolURL,
+    pub accepted_shares: u64,
+    pub rejected_shares: u64,
+    pub active: bool,
+    pub alive: bool,
+    pub user: String,
 }

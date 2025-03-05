@@ -1,6 +1,6 @@
 use measurements::AngularVelocity;
 
 pub struct FanData {
-    position: i16,
-    rpm: AngularVelocity,
+    pub position: i16,
+    pub rpm: AngularVelocity,
 }

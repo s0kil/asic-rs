@@ -1,1 +1,2 @@
-mod data;
+pub mod data;
+pub mod miners;

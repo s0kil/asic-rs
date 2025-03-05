@@ -5,8 +5,8 @@ pub enum MessageSeverity {
 }
 
 pub struct MinerMessage {
-    timestamp: u32,
-    code: i64,
-    message: String,
-    severity: MessageSeverity,
+    pub timestamp: u32,
+    pub code: u64,
+    pub message: String,
+    pub severity: MessageSeverity,
 }

@@ -19,8 +19,8 @@ pub enum MinerMake {
 }
 
 pub struct DeviceInfo {
-    make: MinerMake,
-    model: String, // for now
-    firmware: MinerFirmware,
-    algo: String,
+    pub make: MinerMake,
+    pub model: String, // for now
+    pub firmware: MinerFirmware,
+    pub algo: String,
 }
