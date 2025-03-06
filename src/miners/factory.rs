@@ -9,7 +9,7 @@ use reqwest::header::HeaderMap;
 use tokio::task::JoinSet;
 
 use super::commands::{HTTP_WEB_ROOT, HTTPS_WEB_ROOT, MinerCommand, RPC_DEVDETAILS, RPC_VERSION};
-use crate::data::device::{DeviceInfo, MinerFirmware, MinerMake};
+use crate::data::device::{MinerFirmware, MinerMake};
 
 use super::util::{send_rpc_command, send_web_command};
 
@@ -87,8 +87,8 @@ pub async fn get_miner(
         let _ = discovery_tasks.spawn(get_miner_type_from_command(ip, command));
     }
 
-    let mut timeout = tokio::time::sleep(MAX_WAIT_TIME).fuse();
-    let mut tasks = tokio::spawn(async move {
+    let timeout = tokio::time::sleep(MAX_WAIT_TIME).fuse();
+    let tasks = tokio::spawn(async move {
         loop {
             if discovery_tasks.is_empty() {
                 return None;
@@ -119,7 +119,7 @@ async fn get_miner_type_from_command(
     ip: IpAddr,
     command: MinerCommand,
 ) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
-    return match command {
+    match command {
         MinerCommand::RPC { command } => {
             let response = send_rpc_command(&ip, command).await?;
             parse_type_from_socket(response)
@@ -129,7 +129,7 @@ async fn get_miner_type_from_command(
             parse_type_from_web(response)
         }
         _ => None,
-    };
+    }
 }
 
 fn parse_type_from_socket(
@@ -137,7 +137,7 @@ fn parse_type_from_socket(
 ) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     let json_string = response.to_string().to_uppercase();
 
-    return if json_string.contains("BOSMINER") || json_string.contains("BOSER") {
+    if json_string.contains("BOSMINER") || json_string.contains("BOSER") {
         Some((None, Some(MinerFirmware::BraiinsOS)))
     } else if json_string.contains("BITMICRO") || json_string.contains("BTMINER") {
         Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
@@ -145,7 +145,7 @@ fn parse_type_from_socket(
         Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
     } else {
         None
-    };
+    }
 }
 
 fn parse_type_from_web(
@@ -160,15 +160,16 @@ fn parse_type_from_web(
         Some(header) => header.to_str().unwrap(),
         None => "",
     };
-    return if resp_status == 401 && auth_header.contains("realm=\"antMiner") {
+
+    if resp_status == 401 && auth_header.contains("realm=\"antMiner") {
         Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
     } else if resp_text.contains("Braiins OS") {
         Some((None, Some(MinerFirmware::BraiinsOS)))
-    } else if redirect_header.contains("https://") && resp_status == 307 {
-        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
-    } else if resp_text.contains("/cgi-bin/luci") {
+    } else if redirect_header.contains("https://") && resp_status == 307
+        || resp_text.contains("/cgi-bin/luci")
+    {
         Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
     } else {
         None
-    };
+    }
 }

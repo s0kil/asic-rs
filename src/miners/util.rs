@@ -12,7 +12,7 @@ pub(crate) async fn send_rpc_command(
         .await
         .unwrap();
 
-    let command = String::from(format!("{{\"command\":\"{command}\"}}"));
+    let command = format!("{{\"command\":\"{command}\"}}");
 
     stream.write_all(command.as_bytes()).await.unwrap();
 
@@ -22,8 +22,8 @@ pub(crate) async fn send_rpc_command(
     let response = String::from_utf8_lossy(&buffer)
         .into_owned()
         .replace('\0', "");
-    let parsed = parse_rpc_result(&response);
-    parsed
+    
+    parse_rpc_result(&response)
 }
 
 pub(crate) async fn send_web_command(
@@ -40,7 +40,7 @@ pub(crate) async fn send_web_command(
     let resp = client
         .execute(
             client
-                .get(format!("{}://{}{}", scheme, ip.to_string(), command))
+                .get(format!("{}://{}{}", scheme, ip, command))
                 .build()
                 .expect("Failed to construct request."),
         )
@@ -63,7 +63,7 @@ fn parse_rpc_result(response: &str) -> Option<serde_json::Value> {
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(response);
     let success_codes = ["S", "I"];
 
-    return match parsed.ok() {
+    match parsed.ok() {
         Some(data) => {
             let command_status = data["STATUS"][0]["STATUS"].as_str();
 
@@ -79,5 +79,5 @@ fn parse_rpc_result(response: &str) -> Option<serde_json::Value> {
             }
         }
         None => None,
-    };
+    }
 }
