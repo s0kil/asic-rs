@@ -1,4 +1,3 @@
-use futures::future::Future;
 use futures::future::FutureExt;
 use futures::pin_mut;
 use std::net::IpAddr;
@@ -51,7 +50,7 @@ pub async fn get_miner(
     ip: IpAddr,
     makes: Option<Vec<MinerMake>>,
     firmwares: Option<Vec<MinerFirmware>>,
-) -> Result<Option<DeviceInfo>, Box<dyn Error>> {
+) -> Result<Option<(Option<MinerMake>, Option<MinerFirmware>)>, Box<dyn Error>> {
     let search_makes = makes.unwrap_or(vec![
         MinerMake::AntMiner,
         MinerMake::WhatsMiner,
@@ -113,7 +112,7 @@ pub async fn get_miner(
             None
         }
     );
-    Ok(None)
+    Ok(miner_info)
 }
 
 async fn get_miner_type_from_command(
