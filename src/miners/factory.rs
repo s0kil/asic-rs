@@ -4,7 +4,7 @@ use std::{collections::HashSet, error::Error};
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 
-use super::commands::{HTTP_WEB_ROOT, MinerCommand, RPC_VERSION};
+use super::commands::{HTTP_WEB_ROOT, HTTPS_WEB_ROOT, MinerCommand, RPC_DEVDETAILS, RPC_VERSION};
 use crate::data::device::{DeviceInfo, MinerFirmware, MinerMake};
 
 use super::util::{send_rpc_command, send_web_command};
@@ -17,7 +17,7 @@ impl DiscoveryCommands for MinerMake {
     fn into_discovery_commands(&self) -> Vec<MinerCommand> {
         match self {
             MinerMake::AntMiner => vec![RPC_VERSION, HTTP_WEB_ROOT],
-            MinerMake::WhatsMiner => vec![],
+            MinerMake::WhatsMiner => vec![RPC_DEVDETAILS, HTTPS_WEB_ROOT],
             MinerMake::AvalonMiner => vec![],
             MinerMake::EPic => vec![],
             MinerMake::Braiins => vec![],
@@ -77,9 +77,14 @@ pub async fn get_miner(
     }
 
     for command in commands {
-        let (miner_make, miner_firmware) = get_miner_type_from_command(ip, command).await?;
-        dbg!(miner_make);
-        dbg!(miner_firmware);
+        let miner_info = get_miner_type_from_command(ip, command).await;
+        match miner_info {
+            Some((miner_make, miner_firmware)) => {
+                dbg!(miner_make);
+                dbg!(miner_firmware);
+            }
+            None => {}
+        }
     }
     Ok(None)
 }
@@ -87,17 +92,17 @@ pub async fn get_miner(
 async fn get_miner_type_from_command(
     ip: &IpAddr,
     command: MinerCommand,
-) -> Result<(Option<MinerMake>, Option<MinerFirmware>), Box<dyn Error>> {
+) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     return match command {
         MinerCommand::RPC { command } => {
             let response = send_rpc_command(ip, command).await?;
-            Ok(parse_type_from_socket(response))
+            Some(parse_type_from_socket(response))
         }
         MinerCommand::WebAPI { command, https } => {
             let response = send_web_command(ip, command, https).await?;
-            Ok(parse_type_from_web(response))
+            Some(parse_type_from_web(response))
         }
-        _ => Ok((None, None)),
+        _ => None,
     };
 }
 
@@ -108,17 +113,20 @@ fn parse_type_from_socket(
 
     return if json_string.contains("BOSMINER") || json_string.contains("BOSER") {
         (None, Some(MinerFirmware::BraiinsOS))
+    } else if json_string.contains("BITMICRO") || json_string.contains("BTMINER") {
+        (Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock))
     } else if json_string.contains("ANTMINER") && !json_string.contains("DEVDETAILS") {
         (Some(MinerMake::AntMiner), Some(MinerFirmware::Stock))
     } else {
         (None, None)
     };
 }
+
 fn parse_type_from_web(
     response: (String, HeaderMap, StatusCode),
 ) -> (Option<MinerMake>, Option<MinerFirmware>) {
     let (resp_text, resp_headers, resp_status) = response;
-
+    dbg!(&resp_text);
     let auth_header = match resp_headers.get("www-authenticate") {
         Some(header) => header.to_str().unwrap(),
         None => "",
@@ -127,6 +135,8 @@ fn parse_type_from_web(
         (Some(MinerMake::AntMiner), Some(MinerFirmware::Stock))
     } else if resp_text.contains("Braiins OS") {
         (None, Some(MinerFirmware::BraiinsOS))
+    } else if resp_text.contains("/cgi-bin/luci") {
+        (Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock))
     } else {
         (None, None)
     };
