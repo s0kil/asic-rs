@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq, Eq)]
 pub enum MinerFirmware {
     Stock,
     BraiinsOS,
@@ -9,6 +10,7 @@ pub enum MinerFirmware {
     MSKMiner,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum MinerMake {
     AntMiner,
     WhatsMiner,
@@ -18,6 +20,7 @@ pub enum MinerMake {
     BitAxe,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct DeviceInfo {
     pub make: MinerMake,
     pub model: String, // for now
