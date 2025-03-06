@@ -1,13 +1,20 @@
+use futures::future::Future;
+use futures::future::FutureExt;
+use futures::pin_mut;
 use std::net::IpAddr;
+use std::time::Duration;
 use std::{collections::HashSet, error::Error};
 
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
+use tokio::task::JoinSet;
 
 use super::commands::{HTTP_WEB_ROOT, HTTPS_WEB_ROOT, MinerCommand, RPC_DEVDETAILS, RPC_VERSION};
 use crate::data::device::{DeviceInfo, MinerFirmware, MinerMake};
 
 use super::util::{send_rpc_command, send_web_command};
+
+const MAX_WAIT_TIME: Duration = Duration::from_secs(5);
 
 pub(crate) trait DiscoveryCommands {
     fn into_discovery_commands(&self) -> Vec<MinerCommand>;
@@ -41,7 +48,7 @@ impl DiscoveryCommands for MinerFirmware {
 }
 
 pub async fn get_miner(
-    ip: &IpAddr,
+    ip: IpAddr,
     makes: Option<Vec<MinerMake>>,
     firmwares: Option<Vec<MinerFirmware>>,
 ) -> Result<Option<DeviceInfo>, Box<dyn Error>> {
@@ -76,31 +83,51 @@ pub async fn get_miner(
         }
     }
 
+    let mut discovery_tasks = JoinSet::new();
     for command in commands {
-        let miner_info = get_miner_type_from_command(ip, command).await;
-        match miner_info {
-            Some((miner_make, miner_firmware)) => {
-                dbg!(miner_make);
-                dbg!(miner_firmware);
-            }
-            None => {}
-        }
+        let _ = discovery_tasks.spawn(get_miner_type_from_command(ip, command));
     }
+
+    let mut timeout = tokio::time::sleep(MAX_WAIT_TIME).fuse();
+    let mut tasks = tokio::spawn(async move {
+        loop {
+            if discovery_tasks.is_empty() {
+                return None;
+            };
+            match discovery_tasks.join_next().await.unwrap_or(Ok(None)) {
+                Ok(Some(result)) => {
+                    return Some(result);
+                }
+                _ => continue,
+            };
+        }
+    });
+
+    pin_mut!(timeout, tasks);
+
+    let miner_info = tokio::select!(
+        Ok(miner_info) = &mut tasks => {
+            miner_info
+        },
+        _ = &mut timeout => {
+            None
+        }
+    );
     Ok(None)
 }
 
 async fn get_miner_type_from_command(
-    ip: &IpAddr,
+    ip: IpAddr,
     command: MinerCommand,
 ) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     return match command {
         MinerCommand::RPC { command } => {
-            let response = send_rpc_command(ip, command).await?;
-            Some(parse_type_from_socket(response))
+            let response = send_rpc_command(&ip, command).await?;
+            parse_type_from_socket(response)
         }
         MinerCommand::WebAPI { command, https } => {
-            let response = send_web_command(ip, command, https).await?;
-            Some(parse_type_from_web(response))
+            let response = send_web_command(&ip, command, https).await?;
+            parse_type_from_web(response)
         }
         _ => None,
     };
@@ -108,36 +135,41 @@ async fn get_miner_type_from_command(
 
 fn parse_type_from_socket(
     response: serde_json::Value,
-) -> (Option<MinerMake>, Option<MinerFirmware>) {
+) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     let json_string = response.to_string().to_uppercase();
 
     return if json_string.contains("BOSMINER") || json_string.contains("BOSER") {
-        (None, Some(MinerFirmware::BraiinsOS))
+        Some((None, Some(MinerFirmware::BraiinsOS)))
     } else if json_string.contains("BITMICRO") || json_string.contains("BTMINER") {
-        (Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock))
+        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
     } else if json_string.contains("ANTMINER") && !json_string.contains("DEVDETAILS") {
-        (Some(MinerMake::AntMiner), Some(MinerFirmware::Stock))
+        Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
     } else {
-        (None, None)
+        None
     };
 }
 
 fn parse_type_from_web(
     response: (String, HeaderMap, StatusCode),
-) -> (Option<MinerMake>, Option<MinerFirmware>) {
+) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     let (resp_text, resp_headers, resp_status) = response;
-    dbg!(&resp_text);
     let auth_header = match resp_headers.get("www-authenticate") {
         Some(header) => header.to_str().unwrap(),
         None => "",
     };
+    let redirect_header = match resp_headers.get("location") {
+        Some(header) => header.to_str().unwrap(),
+        None => "",
+    };
     return if resp_status == 401 && auth_header.contains("realm=\"antMiner") {
-        (Some(MinerMake::AntMiner), Some(MinerFirmware::Stock))
+        Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
     } else if resp_text.contains("Braiins OS") {
-        (None, Some(MinerFirmware::BraiinsOS))
+        Some((None, Some(MinerFirmware::BraiinsOS)))
+    } else if redirect_header.contains("https://") && resp_status == 307 {
+        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
     } else if resp_text.contains("/cgi-bin/luci") {
-        (Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock))
+        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
     } else {
-        (None, None)
+        None
     };
 }
