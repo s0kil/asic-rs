@@ -137,14 +137,17 @@ fn parse_type_from_socket(
 ) -> Option<(Option<MinerMake>, Option<MinerFirmware>)> {
     let json_string = response.to_string().to_uppercase();
 
-    if json_string.contains("BOSMINER") || json_string.contains("BOSER") {
-        Some((None, Some(MinerFirmware::BraiinsOS)))
-    } else if json_string.contains("BITMICRO") || json_string.contains("BTMINER") {
-        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
-    } else if json_string.contains("ANTMINER") && !json_string.contains("DEVDETAILS") {
-        Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
-    } else {
-        None
+    match () {
+        _ if json_string.contains("BOSMINER") || json_string.contains("BOSER") => {
+            Some((None, Some(MinerFirmware::BraiinsOS)))
+        }
+        _ if json_string.contains("BITMICRO") || json_string.contains("BTMINER") => {
+            Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
+        }
+        _ if json_string.contains("ANTMINER") && !json_string.contains("DEVDETAILS") => {
+            Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
+        }
+        _ => None,
     }
 }
 
