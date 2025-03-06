@@ -77,23 +77,28 @@ pub async fn get_miner(
     }
 
     for command in commands {
-        match command {
-            MinerCommand::RPC { command } => {
-                let response = send_rpc_command(ip, command).await?;
-                let (miner_type, miner_firmware) = parse_type_from_socket(response);
-                dbg!(miner_type);
-                dbg!(miner_firmware);
-            }
-            MinerCommand::WebAPI { command, https } => {
-                let response = send_web_command(ip, command, https).await?;
-                let (miner_type, miner_firmware) = parse_type_from_web(response);
-                dbg!(miner_type);
-                dbg!(miner_firmware);
-            }
-            _ => todo!(),
-        }
+        let (miner_make, miner_firmware) = get_miner_type_from_command(ip, command).await?;
+        dbg!(miner_make);
+        dbg!(miner_firmware);
     }
     Ok(None)
+}
+
+async fn get_miner_type_from_command(
+    ip: &IpAddr,
+    command: MinerCommand,
+) -> Result<(Option<MinerMake>, Option<MinerFirmware>), Box<dyn Error>> {
+    return match command {
+        MinerCommand::RPC { command } => {
+            let response = send_rpc_command(ip, command).await?;
+            Ok(parse_type_from_socket(response))
+        }
+        MinerCommand::WebAPI { command, https } => {
+            let response = send_web_command(ip, command, https).await?;
+            Ok(parse_type_from_web(response))
+        }
+        _ => Ok((None, None)),
+    };
 }
 
 fn parse_type_from_socket(
