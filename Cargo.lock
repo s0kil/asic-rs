@@ -24,7 +24,6 @@ dependencies = [
  "futures",
  "macaddr",
  "measurements",
- "pin-utils",
  "reqwest",
  "serde",
  "serde_json",

@@ -25,7 +25,7 @@ impl DiscoveryCommands for MinerMake {
             MinerMake::AntMiner => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerMake::WhatsMiner => vec![RPC_DEVDETAILS, HTTPS_WEB_ROOT],
             MinerMake::AvalonMiner => vec![],
-            MinerMake::EPic => vec![],
+            MinerMake::EPic => vec![HTTP_WEB_ROOT],
             MinerMake::Braiins => vec![],
             MinerMake::BitAxe => vec![HTTP_WEB_ROOT],
         }
@@ -37,7 +37,7 @@ impl DiscoveryCommands for MinerFirmware {
             MinerFirmware::Stock => vec![], // stock firmware needs miner make
             MinerFirmware::BraiinsOS => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerFirmware::VNish => vec![],
-            MinerFirmware::EPic => vec![],
+            MinerFirmware::EPic => vec![HTTP_WEB_ROOT],
             MinerFirmware::HiveOn => vec![],
             MinerFirmware::LuxOS => vec![],
             MinerFirmware::Marathon => vec![],
@@ -170,6 +170,8 @@ fn parse_type_from_web(
         Some((None, Some(MinerFirmware::BraiinsOS)))
     } else if resp_text.contains("AxeOS") {
         Some((Some(MinerMake::BitAxe), Some(MinerFirmware::Stock)))
+    } else if resp_text.contains("Miner Web Dashboard") {
+        Some((None, Some(MinerFirmware::EPic)))
     } else if redirect_header.contains("https://") && resp_status == 307
         || resp_text.contains("/cgi-bin/luci")
     {
