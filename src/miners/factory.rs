@@ -16,23 +16,23 @@ use super::util::{send_rpc_command, send_web_command};
 const MAX_WAIT_TIME: Duration = Duration::from_secs(5);
 
 pub(crate) trait DiscoveryCommands {
-    fn into_discovery_commands(&self) -> Vec<MinerCommand>;
+    fn get_discovery_commands(&self) -> Vec<MinerCommand>;
 }
 
 impl DiscoveryCommands for MinerMake {
-    fn into_discovery_commands(&self) -> Vec<MinerCommand> {
+    fn get_discovery_commands(&self) -> Vec<MinerCommand> {
         match self {
             MinerMake::AntMiner => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerMake::WhatsMiner => vec![RPC_DEVDETAILS, HTTPS_WEB_ROOT],
             MinerMake::AvalonMiner => vec![],
             MinerMake::EPic => vec![],
             MinerMake::Braiins => vec![],
-            MinerMake::BitAxe => vec![],
+            MinerMake::BitAxe => vec![HTTP_WEB_ROOT],
         }
     }
 }
 impl DiscoveryCommands for MinerFirmware {
-    fn into_discovery_commands(&self) -> Vec<MinerCommand> {
+    fn get_discovery_commands(&self) -> Vec<MinerCommand> {
         match self {
             MinerFirmware::Stock => vec![], // stock firmware needs miner make
             MinerFirmware::BraiinsOS => vec![RPC_VERSION, HTTP_WEB_ROOT],
@@ -72,12 +72,12 @@ pub async fn get_miner(
     let mut commands: HashSet<MinerCommand> = HashSet::new();
 
     for make in search_makes {
-        for command in make.into_discovery_commands() {
+        for command in make.get_discovery_commands() {
             commands.insert(command);
         }
     }
     for firmware in search_firmwares {
-        for command in firmware.into_discovery_commands() {
+        for command in firmware.get_discovery_commands() {
             commands.insert(command);
         }
     }
@@ -168,6 +168,8 @@ fn parse_type_from_web(
         Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
     } else if resp_text.contains("Braiins OS") {
         Some((None, Some(MinerFirmware::BraiinsOS)))
+    } else if resp_text.contains("AxeOS") {
+        Some((Some(MinerMake::BitAxe), Some(MinerFirmware::Stock)))
     } else if redirect_header.contains("https://") && resp_status == 307
         || resp_text.contains("/cgi-bin/luci")
     {

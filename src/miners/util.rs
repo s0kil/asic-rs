@@ -8,9 +8,11 @@ pub(crate) async fn send_rpc_command(
     ip: &IpAddr,
     command: &'static str,
 ) -> Option<serde_json::Value> {
-    let mut stream = tokio::net::TcpStream::connect(format!("{}:4028", ip))
-        .await
-        .unwrap();
+    let stream = tokio::net::TcpStream::connect(format!("{}:4028", ip)).await;
+    if stream.is_err() {
+        return None;
+    }
+    let mut stream = stream.unwrap();
 
     let command = format!("{{\"command\":\"{command}\"}}");
 
@@ -22,7 +24,7 @@ pub(crate) async fn send_rpc_command(
     let response = String::from_utf8_lossy(&buffer)
         .into_owned()
         .replace('\0', "");
-    
+
     parse_rpc_result(&response)
 }
 
@@ -34,6 +36,7 @@ pub(crate) async fn send_web_command(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .danger_accept_invalid_certs(true)
+        .gzip(true)
         .build()
         .expect("Failed to initalize client");
     let scheme = if https { "https" } else { "http" };
