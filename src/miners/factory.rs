@@ -24,9 +24,9 @@ impl DiscoveryCommands for MinerMake {
         match self {
             MinerMake::AntMiner => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerMake::WhatsMiner => vec![RPC_DEVDETAILS, HTTPS_WEB_ROOT],
-            MinerMake::AvalonMiner => vec![],
+            MinerMake::AvalonMiner => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerMake::EPic => vec![HTTP_WEB_ROOT],
-            MinerMake::Braiins => vec![],
+            MinerMake::Braiins => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerMake::BitAxe => vec![HTTP_WEB_ROOT],
         }
     }
@@ -36,7 +36,7 @@ impl DiscoveryCommands for MinerFirmware {
         match self {
             MinerFirmware::Stock => vec![], // stock firmware needs miner make
             MinerFirmware::BraiinsOS => vec![RPC_VERSION, HTTP_WEB_ROOT],
-            MinerFirmware::VNish => vec![],
+            MinerFirmware::VNish => vec![HTTP_WEB_ROOT, RPC_VERSION],
             MinerFirmware::EPic => vec![HTTP_WEB_ROOT],
             MinerFirmware::HiveOn => vec![],
             MinerFirmware::LuxOS => vec![],
@@ -147,6 +147,10 @@ fn parse_type_from_socket(
         _ if json_string.contains("ANTMINER") && !json_string.contains("DEVDETAILS") => {
             Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
         }
+        _ if json_string.contains("AVALON") => {
+            Some((Some(MinerMake::AvalonMiner), Some(MinerFirmware::Stock)))
+        }
+        _ if json_string.contains("VNISH") => Some((None, Some(MinerFirmware::VNish))),
         _ => None,
     }
 }
@@ -164,19 +168,24 @@ fn parse_type_from_web(
         None => "",
     };
 
-    if resp_status == 401 && auth_header.contains("realm=\"antMiner") {
-        Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
-    } else if resp_text.contains("Braiins OS") {
-        Some((None, Some(MinerFirmware::BraiinsOS)))
-    } else if resp_text.contains("AxeOS") {
-        Some((Some(MinerMake::BitAxe), Some(MinerFirmware::Stock)))
-    } else if resp_text.contains("Miner Web Dashboard") {
-        Some((None, Some(MinerFirmware::EPic)))
-    } else if redirect_header.contains("https://") && resp_status == 307
-        || resp_text.contains("/cgi-bin/luci")
-    {
-        Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
-    } else {
-        None
+    match () {
+        _ if resp_status == 401 && auth_header.contains("realm=\"antMiner") => {
+            Some((Some(MinerMake::AntMiner), Some(MinerFirmware::Stock)))
+        }
+        _ if resp_text.contains("Braiins OS") => Some((None, Some(MinerFirmware::BraiinsOS))),
+        _ if resp_text.contains("AxeOS") => {
+            Some((Some(MinerMake::BitAxe), Some(MinerFirmware::Stock)))
+        }
+        _ if resp_text.contains("Miner Web Dashboard") => Some((None, Some(MinerFirmware::EPic))),
+        _ if resp_text.contains("Avalon") => {
+            Some((Some(MinerMake::AvalonMiner), Some(MinerFirmware::Stock)))
+        }
+        _ if resp_text.contains("AnthillOS") => Some((None, Some(MinerFirmware::VNish))),
+        _ if redirect_header.contains("https://") && resp_status == 307
+            || resp_text.contains("/cgi-bin/luci") =>
+        {
+            Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
+        }
+        _ => None,
     }
 }
