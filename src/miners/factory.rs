@@ -4,11 +4,13 @@ use std::net::IpAddr;
 use std::time::Duration;
 use std::{collections::HashSet, error::Error};
 
-use reqwest::StatusCode;
+use diqwest::WithDigestAuth;
 use reqwest::header::HeaderMap;
+use reqwest::{Client, Response, StatusCode};
 use tokio::task::JoinSet;
 
 use super::commands::{HTTP_WEB_ROOT, HTTPS_WEB_ROOT, MinerCommand, RPC_DEVDETAILS, RPC_VERSION};
+use crate::data::device::models::MinerModel;
 use crate::data::device::{MinerFirmware, MinerMake};
 
 use super::util::{send_rpc_command, send_web_command};
@@ -17,6 +19,9 @@ const MAX_WAIT_TIME: Duration = Duration::from_secs(5);
 
 pub(crate) trait DiscoveryCommands {
     fn get_discovery_commands(&self) -> Vec<MinerCommand>;
+}
+pub(crate) trait ModelSelection {
+    async fn get_model(&self, ip: IpAddr) -> Option<MinerModel>;
 }
 
 impl DiscoveryCommands for MinerMake {
@@ -38,10 +43,27 @@ impl DiscoveryCommands for MinerFirmware {
             MinerFirmware::BraiinsOS => vec![RPC_VERSION, HTTP_WEB_ROOT],
             MinerFirmware::VNish => vec![HTTP_WEB_ROOT, RPC_VERSION],
             MinerFirmware::EPic => vec![HTTP_WEB_ROOT],
-            MinerFirmware::HiveOn => vec![],
+            MinerFirmware::HiveOS => vec![],
             MinerFirmware::LuxOS => vec![],
             MinerFirmware::Marathon => vec![],
             MinerFirmware::MSKMiner => vec![],
+        }
+    }
+}
+impl ModelSelection for MinerFirmware {
+    async fn get_model(&self, ip: IpAddr) -> Option<MinerModel> {
+        match self {
+            _ => None,
+        }
+    }
+}
+
+impl ModelSelection for MinerMake {
+    async fn get_model(&self, ip: IpAddr) -> Option<MinerModel> {
+        match self {
+            MinerMake::AntMiner => get_model_antminer(ip).await,
+            MinerMake::WhatsMiner => get_model_whatsminer(ip).await,
+            _ => None,
         }
     }
 }
@@ -50,7 +72,8 @@ pub async fn get_miner(
     ip: IpAddr,
     makes: Option<Vec<MinerMake>>,
     firmwares: Option<Vec<MinerFirmware>>,
-) -> Result<Option<(Option<MinerMake>, Option<MinerFirmware>)>, Box<dyn Error>> {
+) -> Result<Option<(Option<MinerMake>, Option<MinerModel>, Option<MinerFirmware>)>, Box<dyn Error>>
+{
     let search_makes = makes.unwrap_or(vec![
         MinerMake::AntMiner,
         MinerMake::WhatsMiner,
@@ -64,7 +87,7 @@ pub async fn get_miner(
         MinerFirmware::BraiinsOS,
         MinerFirmware::VNish,
         MinerFirmware::EPic,
-        MinerFirmware::HiveOn,
+        MinerFirmware::HiveOS,
         MinerFirmware::LuxOS,
         MinerFirmware::Marathon,
         MinerFirmware::MSKMiner,
@@ -112,7 +135,17 @@ pub async fn get_miner(
             None
         }
     );
-    Ok(miner_info)
+
+    match miner_info {
+        Some((make, firmware)) => match (make, firmware) {
+            (Some(make), Some(MinerFirmware::Stock)) => {
+                let model = make.get_model(ip).await;
+                Ok(Some((Some(make), model, firmware)))
+            }
+            _ => Ok(None),
+        },
+        None => Ok(None),
+    }
 }
 
 async fn get_miner_type_from_command(
@@ -187,5 +220,40 @@ fn parse_type_from_web(
             Some((Some(MinerMake::WhatsMiner), Some(MinerFirmware::Stock)))
         }
         _ => None,
+    }
+}
+
+async fn get_model_antminer(ip: IpAddr) -> Option<MinerModel> {
+    let response: Option<Response> = Client::new()
+        .get(format!("http://{}/cgi-bin/get_system_info.cgi", ip))
+        .send_with_digest_auth("root", "root")
+        .await
+        .ok();
+    match response {
+        Some(data) => {
+            let json_data = data.json::<serde_json::Value>().await.ok()?;
+            MinerModel::from_string(
+                MinerMake::AntMiner,
+                &json_data["minertype"].as_str().unwrap_or("").to_uppercase(),
+            )
+        }
+        None => None,
+    }
+}
+async fn get_model_whatsminer(ip: IpAddr) -> Option<MinerModel> {
+    let response = send_rpc_command(&ip, "devdetails").await;
+    match response {
+        Some(json_data) => {
+            let model = json_data["DEVDETAILS"][0]["Model"].as_str();
+            if model.is_none() {
+                return None;
+            }
+            let mut model = model.unwrap().replace("_", "");
+            model.pop();
+            model.push('0');
+
+            MinerModel::from_string(MinerMake::WhatsMiner, &model)
+        }
+        None => None,
     }
 }
