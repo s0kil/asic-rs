@@ -62,4 +62,10 @@ impl MinerModel {
             _ => None,
         }
     }
+    pub fn get_make(&self) -> MinerMake {
+        match self {
+            MinerModel::AntMiner(_) => MinerMake::AntMiner,
+            MinerModel::WhatsMiner(_) => MinerMake::WhatsMiner,
+        }
+    }
 }

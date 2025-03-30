@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod models;
-
+pub use models::MinerModel;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum MinerFirmware {
     #[serde(rename = "Stock")]
@@ -55,7 +55,7 @@ pub enum HashAlgorithm {
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeviceInfo {
     pub make: MinerMake,
-    pub model: String, // for now
+    pub model: MinerModel,
     pub firmware: MinerFirmware,
     pub algo: HashAlgorithm,
 }
