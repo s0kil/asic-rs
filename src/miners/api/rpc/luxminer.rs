@@ -2,6 +2,7 @@ use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::status::RPCCommandStatus;
 use crate::miners::api::rpc::traits::SendRPCCommand;
 use serde::de::DeserializeOwned;
+use serde_json::json;
 use std::net::IpAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -39,15 +40,16 @@ impl SendRPCCommand for LUXMinerRPC {
     where
         T: DeserializeOwned,
     {
-        let stream = tokio::net::TcpStream::connect(format!("{}:{}", self.ip, self.port)).await;
-        if stream.is_err() {
-            return Err(RPCError::ConnectionFailed);
-        }
-        let mut stream = stream.unwrap();
+        let mut stream = tokio::net::TcpStream::connect((self.ip, self.port))
+            .await
+            .map_err(|_| RPCError::ConnectionFailed)?;
 
-        let command = format!("{{\"command\":\"{command}\"}}");
+        let request = json!({ "cmd": command });
 
-        stream.write_all(command.as_bytes()).await.unwrap();
+        stream
+            .write_all(request.to_string().as_bytes())
+            .await
+            .unwrap();
 
         let mut buffer = Vec::new();
         stream.read_to_end(&mut buffer).await.unwrap();
