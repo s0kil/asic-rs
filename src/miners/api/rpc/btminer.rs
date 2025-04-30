@@ -1,6 +1,7 @@
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::status::RPCCommandStatus;
 use crate::miners::api::rpc::traits::SendRPCCommand;
+use dyn_serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::net::IpAddr;
@@ -50,7 +51,11 @@ impl RPCCommandStatus {
 }
 
 impl SendRPCCommand for BTMinerV3RPC {
-    async fn send_command<T>(&self, command: &'static str) -> Result<T, RPCError>
+    async fn send_command<T>(
+        &self,
+        command: &'static str,
+        param: Option<Box<dyn Serialize>>,
+    ) -> Result<T, RPCError>
     where
         T: DeserializeOwned,
     {
@@ -58,7 +63,10 @@ impl SendRPCCommand for BTMinerV3RPC {
             .await
             .map_err(|_| RPCError::ConnectionFailed)?;
 
-        let request = json!({ "cmd": command });
+        let request = match param {
+            Some(p) => json!({ "cmd": command, "param": p }),
+            None => json!({ "cmd": command }),
+        };
         let json_str = request.to_string();
         let json_bytes = json_str.as_bytes();
         let length = json_bytes.len() as u32;

@@ -9,11 +9,11 @@ use std::net::IpAddr;
 async fn main() {
     let miner_ip = IpAddr::from([10, 0, 14, 208]);
 
-    // let miner = BTMinerV3Backend::new(miner_ip);
-    // dbg!(miner.rpc.send_command::<Value>("get.device.info").await);
-
     let miner = BTMinerV3Backend::new(miner_ip);
-    dbg!(miner.get_device_info().await.unwrap());
+    dbg!(miner.get_miner_status_summary().await.unwrap());
+
+    // let miner = BTMinerV3Backend::new(miner_ip);
+    // dbg!(miner.get_device_info().await.unwrap());
 
     // let miner_info = get_miner(miner_ip).await.unwrap();
     // dbg!(miner_info);

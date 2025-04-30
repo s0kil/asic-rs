@@ -22,6 +22,7 @@ name = "asic-rs"
 version = "0.1.0"
 dependencies = [
  "diqwest",
+ "dyn_serde",
  "futures",
  "macaddr",
  "measurements",
@@ -206,6 +207,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "dyn_serde"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42501063765b768d479b7c61ff59de45bbe9ab37675d13a253647f2d4748a1d6"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

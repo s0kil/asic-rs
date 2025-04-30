@@ -1,11 +1,13 @@
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::data::fan::FanData;
+use crate::data::hashrate::{HashRate, HashRateUnit};
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::{btminer::BTMinerV3RPC, traits::SendRPCCommand};
 use macaddr::MacAddr;
-use measurements::{AngularVelocity, Power, Voltage};
+use measurements::{AngularVelocity, Power, Temperature, Voltage};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
@@ -21,7 +23,12 @@ impl BTMinerV3Backend {
     }
     pub async fn get_device_info(&self) -> Result<GetDeviceInfo, RPCError> {
         self.rpc
-            .send_command::<GetDeviceInfo>("get.device.info")
+            .send_command::<GetDeviceInfo>("get.device.info", None)
+            .await
+    }
+    pub async fn get_miner_status_summary(&self) -> Result<GetMinerStatusSummary, RPCError> {
+        self.rpc
+            .send_command::<GetMinerStatusSummary>("get.miner.status", Some(Box::new("summary")))
             .await
     }
 }
@@ -115,6 +122,75 @@ impl<'de> Deserialize<'de> for GetDeviceInfo {
             wattage_limit,
             voltage,
             board_sns,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct GetMinerStatusSummary {
+    pub uptime: Option<Duration>,
+    pub wattage: Option<Power>,
+    pub hashrate: Option<HashRate>,
+    pub expected_hashrate: Option<HashRate>,
+    pub fluid_temperature: Option<Temperature>,
+    pub fans: Vec<FanData>,
+}
+
+impl<'de> Deserialize<'de> for GetMinerStatusSummary {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        let uptime = value["msg"]["summary"]["elapsed"]
+            .as_u64()
+            .map(|i| Duration::from_secs(i));
+
+        let wattage = value["msg"]["summary"]["power-realtime"]
+            .as_f64()
+            .map(|f| Power::from_watts(f));
+
+        let hashrate = value["msg"]["summary"]["hash-realtime"]
+            .as_f64()
+            .map(|f| HashRate {
+                value: f,
+                unit: HashRateUnit::TeraHash,
+                algo: String::from("SHA256"),
+            });
+
+        let expected_hashrate =
+            value["msg"]["summary"]["factory-hash"]
+                .as_f64()
+                .map(|f| HashRate {
+                    value: f,
+                    unit: HashRateUnit::TeraHash,
+                    algo: String::from("SHA256"),
+                });
+
+        let fluid_temperature = value["msg"]["summary"]["environment-temperature"]
+            .as_f64()
+            .map(|f| Temperature::from_celsius(f));
+
+        let mut fans: Vec<FanData> = Vec::new();
+
+        for (idx, direction) in ["in", "out"].iter().enumerate() {
+            let fan = value["msg"]["summary"][format!("fan-speed-{}", direction)].as_f64();
+            if fan.is_some() {
+                fans.push(FanData {
+                    position: idx as i16,
+                    rpm: AngularVelocity::from_rpm(fan.unwrap()),
+                });
+            }
+        }
+
+        Ok(GetMinerStatusSummary {
+            uptime,
+            wattage,
+            hashrate,
+            expected_hashrate,
+            fluid_temperature,
+            fans,
         })
     }
 }
