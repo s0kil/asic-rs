@@ -1,9 +1,11 @@
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolScheme {
     StratumV1,
     StratumV1SSL,
     StratumV2,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolURL {
     pub scheme: PoolScheme,
     pub host: String,
@@ -11,6 +13,7 @@ pub struct PoolURL {
     pub pubkey: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolData {
     pub position: u16,
     pub url: PoolURL,

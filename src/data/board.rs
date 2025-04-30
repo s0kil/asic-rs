@@ -1,6 +1,7 @@
 use super::hashrate::HashRate;
 use measurements::{Frequency, Temperature, Voltage};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChipData {
     pub position: u16,
     pub hashrate: HashRate,
@@ -11,6 +12,7 @@ pub struct ChipData {
     pub working: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoardData {
     pub position: u16,
     pub hashrate: HashRate,
