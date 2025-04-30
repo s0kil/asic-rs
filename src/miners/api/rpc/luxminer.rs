@@ -1,6 +1,7 @@
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::status::RPCCommandStatus;
 use crate::miners::api::rpc::traits::SendRPCCommand;
+use dyn_serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::net::IpAddr;
@@ -36,7 +37,11 @@ impl RPCCommandStatus {
 }
 
 impl SendRPCCommand for LUXMinerRPC {
-    async fn send_command<T>(&self, command: &'static str) -> Result<T, RPCError>
+    async fn send_command<T>(
+        &self,
+        command: &'static str,
+        param: Option<Box<dyn Serialize>>,
+    ) -> Result<T, RPCError>
     where
         T: DeserializeOwned,
     {

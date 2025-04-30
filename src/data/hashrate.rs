@@ -13,7 +13,7 @@ pub enum HashRateUnit {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HashRate {
-    pub value: f32,
+    pub value: f64,
     pub unit: HashRateUnit,
     pub algo: String,
 }
