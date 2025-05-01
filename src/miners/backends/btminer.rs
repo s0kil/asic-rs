@@ -1,9 +1,13 @@
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::traits::GetMinerData;
+use crate::data::board::BoardData;
+use crate::data::device::{DeviceInfo, HashAlgorithm, MinerFirmware, MinerMake, MinerModel};
 use crate::data::fan::FanData;
 use crate::data::hashrate::{HashRate, HashRateUnit};
+use crate::data::miner::MinerData;
 use crate::data::pool::{PoolData, PoolURL};
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::{btminer::BTMinerV3RPC, traits::SendRPCCommand};
@@ -13,13 +17,22 @@ use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
 pub struct BTMinerV3Backend {
+    pub ip: IpAddr,
     pub rpc: BTMinerV3RPC,
+    pub device_info: DeviceInfo,
 }
 
 impl BTMinerV3Backend {
-    pub fn new(ip: IpAddr) -> Self {
+    pub fn new(ip: IpAddr, model: MinerModel) -> Self {
         BTMinerV3Backend {
+            ip,
             rpc: BTMinerV3RPC::new(ip, None),
+            device_info: DeviceInfo::new(
+                MinerMake::WhatsMiner,
+                model,
+                MinerFirmware::Stock,
+                HashAlgorithm::SHA256,
+            ),
         }
     }
     pub async fn get_device_info(&self) -> Result<GetDeviceInfo, RPCError> {
@@ -41,6 +54,186 @@ impl BTMinerV3Backend {
         self.rpc
             .send_command::<GetMinerStatusEDevs>("get.miner.status", Some(Box::new("edevs")))
             .await
+    }
+}
+
+impl GetMinerData for BTMinerV3Backend {
+    async fn get_data(&self) -> MinerData {
+        let (device_info, miner_status_summary, miner_status_pools, miner_status_edevs) = tokio::join!(
+            self.get_device_info(),
+            self.get_miner_status_summary(),
+            self.get_miner_status_pools(),
+            self.get_miner_status_edevs(),
+        );
+
+        // construct hashboard info
+        let mut boards: Vec<BoardData> = Vec::new();
+        for position in 0..self.device_info.hardware.boards.unwrap_or(0) {
+            let hashrate = match &miner_status_edevs {
+                Ok(edevs) => edevs.board_hashrates.get(position as usize).cloned(),
+                _ => None,
+            };
+            let expected_hashrate = match &miner_status_edevs {
+                Ok(edevs) => edevs
+                    .board_expected_hashrates
+                    .get(position as usize)
+                    .cloned(),
+                _ => None,
+            };
+            let outlet_temperature = match &miner_status_edevs {
+                Ok(edevs) => edevs
+                    .board_outlet_temperatures
+                    .get(position as usize)
+                    .cloned(),
+                _ => None,
+            };
+            let intake_temperature = match &miner_status_edevs {
+                Ok(edevs) => edevs
+                    .board_intake_temperatures
+                    .get(position as usize)
+                    .cloned(),
+                _ => None,
+            };
+            let working_chips = match &miner_status_edevs {
+                Ok(edevs) => edevs.board_working_chips.get(position as usize).cloned(),
+                _ => None,
+            };
+            let frequency = match &miner_status_edevs {
+                Ok(edevs) => edevs.board_freqs.get(position as usize).cloned(),
+                _ => None,
+            };
+            let serial_number = match &device_info {
+                Ok(info) => info.board_sns.get(position as usize).cloned(),
+                _ => None,
+            };
+
+            boards.push(BoardData {
+                position,
+                hashrate,
+                expected_hashrate,
+                board_temperature: None,
+                intake_temperature,
+                outlet_temperature,
+                expected_chips: self.device_info.hardware.chips,
+                working_chips,
+                serial_number,
+                chips: Vec::new(),
+                voltage: match &device_info {
+                    Ok(info) => info.voltage,
+                    _ => None,
+                },
+                frequency,
+                tuned: None,
+                active: Some(true),
+            })
+        }
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Failed to get system time")
+            .as_secs();
+
+        let hashrate = match &miner_status_summary {
+            Ok(summary) => summary.hashrate.clone(),
+            _ => None,
+        };
+        let wattage = match &miner_status_summary {
+            Ok(summary) => summary.wattage.clone(),
+            _ => None,
+        };
+        let efficiency = match (hashrate.clone(), wattage.clone()) {
+            (Some(hr), Some(w)) => Some(w / hr),
+            _ => None,
+        };
+
+        MinerData {
+            schema_version: env!("CARGO_PKG_VERSION").to_string(),
+            timestamp,
+            ip: self.ip.clone(),
+            mac: match &device_info {
+                Ok(info) => info.mac.clone(),
+                _ => None,
+            },
+            device_info: self.device_info.clone(),
+            serial_number: match &device_info {
+                Ok(info) => info.serial_number.clone(),
+                _ => None,
+            },
+            hostname: match &device_info {
+                Ok(info) => info.hostname.clone(),
+                _ => None,
+            },
+            api_version: match &device_info {
+                Ok(info) => info.api_version.clone(),
+                _ => None,
+            },
+            firmware_version: match &device_info {
+                Ok(info) => info.fw_version.clone(),
+                _ => None,
+            },
+            control_board_version: match &device_info {
+                Ok(info) => info.control_board_version.clone(),
+                _ => None,
+            },
+            expected_hashboards: self.device_info.hardware.boards.clone(),
+            hashboards: boards.clone(),
+            hashrate,
+            expected_chips: match (
+                self.device_info.hardware.chips,
+                self.device_info.hardware.boards,
+            ) {
+                (Some(chips), Some(boards)) => Some(chips * boards as u16),
+                (Some(chips), _) => Some(chips.clone()),
+                _ => None,
+            },
+            total_chips: Some(boards.iter().filter_map(|b| b.working_chips).sum()),
+            expected_fans: self.device_info.hardware.fans.clone(),
+            fans: match &miner_status_summary {
+                Ok(summary) => summary.fans.clone(),
+                _ => Vec::new(),
+            },
+            psu_fans: match &device_info {
+                Ok(info) => info.psu_fans.clone(),
+                _ => Vec::new(),
+            },
+            average_temperature: {
+                let (sum, count) = boards
+                    .iter()
+                    .filter_map(|b| b.board_temperature.as_ref()) // or .intake_temperature, etc.
+                    .fold((0.0, 0), |(sum, count), temp| {
+                        (sum + temp.as_celsius(), count + 1)
+                    });
+
+                if count > 0 {
+                    Some(Temperature::from_celsius(sum / count as f64))
+                } else {
+                    None
+                }
+            },
+            fluid_temperature: match &miner_status_summary {
+                Ok(summary) => summary.fluid_temperature.clone(),
+                _ => None,
+            },
+            wattage,
+            wattage_limit: match &device_info {
+                Ok(info) => info.wattage_limit.clone(),
+                _ => None,
+            },
+            efficiency,
+            light_flashing: match &device_info {
+                Ok(info) => info.light_flashing.clone(),
+                _ => None,
+            },
+            messages: Vec::new(),
+            uptime: match &miner_status_summary {
+                Ok(summary) => summary.uptime.clone(),
+                _ => None,
+            },
+            is_mining: true,
+            pools: match &miner_status_pools {
+                Ok(pools) => pools.pools.clone(),
+                _ => Vec::new(),
+            },
+        }
     }
 }
 
