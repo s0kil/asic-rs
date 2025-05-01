@@ -49,7 +49,7 @@ impl SendRPCCommand for LUXMinerRPC {
             .await
             .map_err(|_| RPCError::ConnectionFailed)?;
 
-        let request = json!({ "cmd": command });
+        let request = json!({ "cmd": command, "param": param });
 
         stream
             .write_all(request.to_string().as_bytes())

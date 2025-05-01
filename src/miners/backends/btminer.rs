@@ -4,10 +4,11 @@ use std::time::Duration;
 
 use crate::data::fan::FanData;
 use crate::data::hashrate::{HashRate, HashRateUnit};
+use crate::data::pool::{PoolData, PoolURL};
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::{btminer::BTMinerV3RPC, traits::SendRPCCommand};
 use macaddr::MacAddr;
-use measurements::{AngularVelocity, Power, Temperature, Voltage};
+use measurements::{AngularVelocity, Frequency, Power, Temperature, Voltage};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
@@ -29,6 +30,16 @@ impl BTMinerV3Backend {
     pub async fn get_miner_status_summary(&self) -> Result<GetMinerStatusSummary, RPCError> {
         self.rpc
             .send_command::<GetMinerStatusSummary>("get.miner.status", Some(Box::new("summary")))
+            .await
+    }
+    pub async fn get_miner_status_pools(&self) -> Result<GetMinerStatusPools, RPCError> {
+        self.rpc
+            .send_command::<GetMinerStatusPools>("get.miner.status", Some(Box::new("pools")))
+            .await
+    }
+    pub async fn get_miner_status_edevs(&self) -> Result<GetMinerStatusEDevs, RPCError> {
+        self.rpc
+            .send_command::<GetMinerStatusEDevs>("get.miner.status", Some(Box::new("edevs")))
             .await
     }
 }
@@ -110,7 +121,7 @@ impl<'de> Deserialize<'de> for GetDeviceInfo {
             }
         }
 
-        Ok(GetDeviceInfo {
+        Ok(Self {
             api_version,
             fw_version,
             control_board_version,
@@ -184,13 +195,118 @@ impl<'de> Deserialize<'de> for GetMinerStatusSummary {
             }
         }
 
-        Ok(GetMinerStatusSummary {
+        Ok(Self {
             uptime,
             wattage,
             hashrate,
             expected_hashrate,
             fluid_temperature,
             fans,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct GetMinerStatusPools {
+    pools: Vec<PoolData>,
+}
+
+impl<'de> Deserialize<'de> for GetMinerStatusPools {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        let pool_data = value["msg"]["pools"].as_array();
+
+        let mut pools: Vec<PoolData> = Vec::new();
+        pool_data.map(|p| {
+            for pool in p.iter() {
+                let position = pool["id"].as_u64().map(|u| (u - 1) as u16);
+                let url = pool["url"].as_str().map(|s| PoolURL::from(s.to_string()));
+                let alive = pool["status"].as_str().map(|s| s == "alive");
+                let active = pool["stratum-active"].as_bool();
+                let user = pool["account"].as_str().map(|s| s.to_string());
+
+                pools.push(PoolData {
+                    position,
+                    url,
+                    alive,
+                    active,
+                    user,
+                    accepted_shares: None,
+                    rejected_shares: None,
+                });
+            }
+        });
+
+        Ok(Self { pools })
+    }
+}
+
+#[derive(Debug)]
+pub struct GetMinerStatusEDevs {
+    board_intake_temperatures: Vec<Temperature>,
+    board_outlet_temperatures: Vec<Temperature>,
+    board_working_chips: Vec<u16>,
+    board_hashrates: Vec<HashRate>,
+    board_expected_hashrates: Vec<HashRate>,
+    board_freqs: Vec<Frequency>,
+}
+
+impl<'de> Deserialize<'de> for GetMinerStatusEDevs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        let mut board_intake_temperatures: Vec<Temperature> = Vec::new();
+        let mut board_outlet_temperatures: Vec<Temperature> = Vec::new();
+        let mut board_working_chips: Vec<u16> = Vec::new();
+        let mut board_hashrates: Vec<HashRate> = Vec::new();
+        let mut board_expected_hashrates: Vec<HashRate> = Vec::new();
+        let mut board_freqs: Vec<Frequency> = Vec::new();
+
+        value["msg"]["edevs"].as_array().map(|devices| {
+            for device in devices.iter() {
+                device["chip-temp-min"]
+                    .as_f64()
+                    .map(|f| board_intake_temperatures.push(Temperature::from_celsius(f)));
+                device["chip-temp-max"]
+                    .as_f64()
+                    .map(|f| board_outlet_temperatures.push(Temperature::from_celsius(f)));
+                device["effective-chips"]
+                    .as_u64()
+                    .map(|u| board_working_chips.push(u as u16));
+                device["hash-average"].as_f64().map(|f| {
+                    board_hashrates.push(HashRate {
+                        value: f,
+                        unit: HashRateUnit::TeraHash,
+                        algo: String::from("SHA256"),
+                    })
+                });
+                device["factory-hash"].as_f64().map(|f| {
+                    board_expected_hashrates.push(HashRate {
+                        value: f,
+                        unit: HashRateUnit::TeraHash,
+                        algo: String::from("SHA256"),
+                    })
+                });
+                device["freq"]
+                    .as_f64()
+                    .map(|f| board_freqs.push(Frequency::from_megahertz(f)));
+            }
+        });
+
+        Ok(Self {
+            board_intake_temperatures,
+            board_outlet_temperatures,
+            board_working_chips,
+            board_hashrates,
+            board_expected_hashrates,
+            board_freqs,
         })
     }
 }
