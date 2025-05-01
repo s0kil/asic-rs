@@ -3,7 +3,7 @@ use measurements::{Frequency, Temperature, Voltage};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChipData {
-    pub position: Option<u16>,
+    pub position: u16,
     pub hashrate: Option<HashRate>,
     pub temperature: Option<Temperature>,
     pub voltage: Option<Voltage>,
@@ -14,7 +14,7 @@ pub struct ChipData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardData {
-    pub position: Option<u16>,
+    pub position: u8,
     pub hashrate: Option<HashRate>,
     pub expected_hashrate: Option<HashRate>,
     pub board_temperature: Option<Temperature>,
