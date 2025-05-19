@@ -54,7 +54,7 @@ impl SendRPCCommand for BTMinerV3RPC {
     async fn send_command<T>(
         &self,
         command: &'static str,
-        param: Option<Box<dyn Serialize>>,
+        param: Option<Box<dyn Serialize + Send>>,
     ) -> Result<T, RPCError>
     where
         T: DeserializeOwned,
@@ -64,7 +64,10 @@ impl SendRPCCommand for BTMinerV3RPC {
             .map_err(|_| RPCError::ConnectionFailed)?;
 
         let request = match param {
-            Some(p) => json!({ "cmd": command, "param": p }),
+            Some(p) => {
+                let p_serialize: Box<dyn Serialize> = p;
+                json!({ "cmd": command, "param": p_serialize })
+            }
             None => json!({ "cmd": command }),
         };
         let json_str = request.to_string();

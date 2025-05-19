@@ -3,11 +3,11 @@ use dyn_serde::Serialize;
 use serde::de::DeserializeOwned;
 
 pub trait SendRPCCommand {
-    async fn send_command<T>(
+    fn send_command<T>(
         &self,
         command: &'static str,
-        param: Option<Box<dyn Serialize>>,
-    ) -> Result<T, RPCError>
+        param: Option<Box<dyn Serialize + Send>>,
+    ) -> impl std::future::Future<Output = Result<T, RPCError>> + Send
     where
         T: DeserializeOwned;
 

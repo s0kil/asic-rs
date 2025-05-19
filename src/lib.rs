@@ -6,7 +6,9 @@ use std::net::IpAddr;
 pub mod data;
 pub mod miners;
 
-pub async fn get_miner(ip: IpAddr) -> Result<Option<Box<impl GetMinerData>>, Box<dyn Error>> {
+pub async fn get_miner(
+    ip: IpAddr,
+) -> Result<Option<Box<impl GetMinerData>>, Box<dyn Error + Send>> {
     let factory = MinerFactory::new();
     factory.get_miner(ip).await
 }

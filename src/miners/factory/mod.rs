@@ -119,7 +119,7 @@ impl MinerFactory {
     pub async fn get_miner(
         self,
         ip: IpAddr,
-    ) -> Result<Option<Box<impl GetMinerData>>, Box<dyn Error>> {
+    ) -> Result<Option<Box<impl GetMinerData>>, Box<dyn Error + Send>> {
         let search_makes = self.search_makes.clone().unwrap_or(vec![
             MinerMake::AntMiner,
             MinerMake::WhatsMiner,

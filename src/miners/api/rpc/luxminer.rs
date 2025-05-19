@@ -40,7 +40,7 @@ impl SendRPCCommand for LUXMinerRPC {
     async fn send_command<T>(
         &self,
         command: &'static str,
-        param: Option<Box<dyn Serialize>>,
+        param: Option<Box<dyn Serialize + Send>>,
     ) -> Result<T, RPCError>
     where
         T: DeserializeOwned,
@@ -49,7 +49,13 @@ impl SendRPCCommand for LUXMinerRPC {
             .await
             .map_err(|_| RPCError::ConnectionFailed)?;
 
-        let request = json!({ "cmd": command, "param": param });
+        let request = match param {
+            Some(p) => {
+                let p_serialize: Box<dyn Serialize> = p;
+                json!({ "cmd": command, "param": p_serialize })
+            }
+            None => json!({ "cmd": command }),
+        };
 
         stream
             .write_all(request.to_string().as_bytes())
