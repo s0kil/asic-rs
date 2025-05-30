@@ -1,9 +1,12 @@
 use crate::data::device::models::MinerModelFactory;
 use crate::data::device::{MinerFirmware, MinerMake, MinerModel};
+use crate::miners::factory::model::whatsminer::{get_model_whatsminer_v2, get_model_whatsminer_v3};
 use crate::miners::util;
 use diqwest::WithDigestAuth;
 use reqwest::{Client, Response};
 use std::net::IpAddr;
+
+pub mod whatsminer;
 
 pub(crate) async fn get_model_antminer(ip: IpAddr) -> Option<MinerModel> {
     let response: Option<Response> = Client::new()
@@ -25,20 +28,38 @@ pub(crate) async fn get_model_antminer(ip: IpAddr) -> Option<MinerModel> {
 }
 
 pub(crate) async fn get_model_whatsminer(ip: IpAddr) -> Option<MinerModel> {
-    let response = util::send_rpc_command(&ip, "devdetails").await;
+    let response = util::send_rpc_command(&ip, "get_version").await;
+
     match response {
         Some(json_data) => {
-            let model = json_data["DEVDETAILS"][0]["Model"].as_str();
-            if model.is_none() {
+            let fw_version: Option<&str> = json_data["Msg"]["fw_ver"].as_str();
+            if fw_version.is_none() {
                 return None;
             }
-            let mut model = model.unwrap().to_uppercase().replace("_", "");
-            model.pop();
-            model.push('0');
 
-            MinerModelFactory::new()
-                .with_make(MinerMake::WhatsMiner)
-                .parse_model(&model)
+            let fw_version = fw_version.unwrap();
+
+            // Parse the firmware version format: YYYYMMDD.XX.REL
+            // Extract the date components
+            if fw_version.len() < 8 {
+                return None;
+            }
+
+            let date_part = &fw_version[..8];
+            if let (Ok(year), Ok(month), Ok(_day)) = (
+                date_part[..4].parse::<u32>(),
+                date_part[4..6].parse::<u32>(),
+                date_part[6..8].parse::<u32>(),
+            ) {
+                // Determine which API version to use based on the firmware date
+                if year >= 2025 || (year == 2024 && month >= 11) {
+                    get_model_whatsminer_v3(ip).await
+                } else {
+                    get_model_whatsminer_v2(ip).await
+                }
+            } else {
+                return None;
+            }
         }
         None => None,
     }

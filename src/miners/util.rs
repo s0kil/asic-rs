@@ -66,7 +66,9 @@ fn parse_rpc_result(response: &str) -> Option<serde_json::Value> {
 
     match parsed.ok() {
         Some(data) => {
-            let command_status = data["STATUS"][0]["STATUS"].as_str();
+            let command_status_generic = data["STATUS"][0]["STATUS"].as_str();
+            let command_status_whatsminer = data["STATUS"].as_str();
+            let command_status = command_status_generic.or(command_status_whatsminer);
 
             match command_status {
                 Some(status) => {
