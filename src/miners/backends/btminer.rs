@@ -1,7 +1,3 @@
-use std::net::IpAddr;
-use std::str::FromStr;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use async_trait::async_trait;
 use super::traits::GetMinerData;
 use crate::data::board::BoardData;
 use crate::data::device::{DeviceInfo, HashAlgorithm, MinerFirmware, MinerMake, MinerModel};
@@ -11,10 +7,14 @@ use crate::data::miner::MinerData;
 use crate::data::pool::{PoolData, PoolURL};
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::{btminer::BTMinerV3RPC, traits::SendRPCCommand};
+use async_trait::async_trait;
 use macaddr::MacAddr;
 use measurements::{AngularVelocity, Frequency, Power, Temperature, Voltage};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+use std::net::IpAddr;
+use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct BTMinerV3Backend {
     pub ip: IpAddr,

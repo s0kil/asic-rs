@@ -1,11 +1,11 @@
 use crate::miners::api::rpc::errors::RPCError;
 use crate::miners::api::rpc::status::RPCCommandStatus;
 use crate::miners::api::rpc::traits::SendRPCCommand;
+use async_trait::async_trait;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::net::IpAddr;
-use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub struct BTMinerV3RPC {
@@ -69,7 +69,7 @@ impl SendRPCCommand for BTMinerV3RPC {
         let request = match param {
             Some(p) => {
                 json!({ "cmd": command, "param": p })
-            },
+            }
             None => json!({ "cmd": command }),
         };
         let json_str = request.to_string();

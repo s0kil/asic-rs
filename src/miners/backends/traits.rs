@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::data::miner::MinerData;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait GetMinerData {
