@@ -1,7 +1,7 @@
 use crate::miners::api::rpc::errors::RPCError;
+use async_trait::async_trait;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use async_trait::async_trait;
 
 #[async_trait]
 pub trait SendRPCCommand {
