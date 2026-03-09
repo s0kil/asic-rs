@@ -178,6 +178,44 @@ impl VnishWebAPI {
 
         Ok(response)
     }
+
+    pub async fn find_miner(&self, on: bool) -> anyhow::Result<Value> {
+        let url = format!("http://{}:{}/api/v1/find-miner", self.ip, self.port);
+        let response = self
+            .execute_request(&url, &Method::POST, Some(serde_json::json!({ "on": on })))
+            .await?;
+
+        let status = response.status();
+        if status.is_success() {
+            let json_data = response
+                .json()
+                .await
+                .map_err(|e| VnishError::ParseError(e.to_string()))?;
+            Ok(json_data)
+        } else {
+            Err(VnishError::HttpError(status.as_u16()))?
+        }
+    }
+
+    pub async fn restart(&self) -> anyhow::Result<Value> {
+        self.send_command("mining/restart", true, None, Method::POST)
+            .await
+    }
+
+    pub async fn stop(&self) -> anyhow::Result<Value> {
+        self.send_command("mining/stop", true, None, Method::POST)
+            .await
+    }
+
+    pub async fn start(&self) -> anyhow::Result<Value> {
+        self.send_command("mining/start", true, None, Method::POST)
+            .await
+    }
+
+    pub async fn set_settings(&self, settings: Value) -> anyhow::Result<Value> {
+        self.send_command("settings", true, Some(settings), Method::POST)
+            .await
+    }
 }
 
 /// Error types for Vnish WebAPI operations
